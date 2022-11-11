@@ -1,0 +1,32 @@
+#include <winver.h>
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     ${filever}
+PRODUCTVERSION  ${prodver}
+FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK
+FILEOS          VOS__WINDOWS32
+FILETYPE        VFT_APP
+FILESUBTYPE     VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904E4"
+        BEGIN
+            VALUE "CompanyName",      "${company_name}"
+            VALUE "FileDescription",  "${file_desc}"
+            VALUE "FileVersion",      "${file_ver}"
+            VALUE "InternalName",     "${internal_name}"
+            VALUE "LegalCopyright",   "${copyright}"
+            VALUE "OriginalFilename", "${orig_file}"
+            VALUE "ProductName",      "${prod_name}"
+            VALUE "ProductVersion",   "${prod_ver}"
+        END
+    END
+
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1252
+    END
+END
+
+${icon}
