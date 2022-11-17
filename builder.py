@@ -260,7 +260,10 @@ def clean_loader():
 
 def clean_output():
     output_dir = f"{os.getcwd()}\output"
-    shutil.rmtree(output_dir)
+    try:
+        shutil.rmtree(output_dir)
+    except:
+        pass
     os.makedirs(output_dir)
 
 
