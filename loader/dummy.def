@@ -1,0 +1,4 @@
+LIBRARY "DUMMY"
+EXPORTS
+
+Dummy
